@@ -1,11 +1,9 @@
 # See: https://book.getfoundry.sh/reference/config/overview
 
 [profile.default]
-solc_version = "0.8.20"
-evm_version = "paris"
-src = "source"
-out = "out"
+optimizer = true
 libs = ["lib"]
+src = "source"
 
 [etherscan]
 avalanche = { key = "${ETHERSCAN_API_KEY}", url = "https://api.snowscan.xyz/api" }
