@@ -1,10 +1,7 @@
-[![Main](https://github.com/blackhan-software/xpower-hh/actions/workflows/main.yaml/badge.svg)](https://github.com/blackhan-software/xpower-hh/actions/workflows/main.yaml)
-
 # XPower Token
 
-XPower is a proof-of-work token, i.e. it can only be minted by providing a correct nonce (with a recent block-hash). It has a maximum supply of 0.930T × 1E64 XPOW. To be exact, the maximum supply of the XPOW token is:
-
-> 9304721456570051417965525581055278309637766624917545324597787815844239114240
+XPower is a proof-of-work token, i.e. it can only be minted by providing a
+correct nonce (with a recent block-hash).
 
 ## Usage
 
@@ -45,16 +42,29 @@ $ cp .env-avalanche-main .env && source .env
 ```
 
 ```shell
-$ alias forge-script="forge script -f $RPC_URL --private-key $PRIVATE_KEY0"
+$ alias forge-script="forge script -f $FORK_URL --private-key $PRIVATE_KEY0"
 ```
 
+#### Create Contracts
+
 ```shell
-$ forge-script script/moe-v9c.s.sol [--broadcast]
-$ forge-script script/nft-v9c.s.sol [--broadcast]
-$ forge-script script/ppt-v9c.s.sol [--broadcast]
-$ forge-script script/sov-v9c.s.sol [--broadcast]
-$ forge-script script/mty-v9c.s.sol [--broadcast]
-$ forge-script script/pty-v9c.s.sol [--broadcast]
+$ forge-script script/moe-10a.s.sol --broadcast --verify
+$ forge-script script/nft-10a.s.sol --broadcast --verify
+$ forge-script script/ppt-10a.s.sol --broadcast --verify
+$ forge-script script/sov-10a.s.sol --broadcast --verify
+$ forge-script script/mty-10a.s.sol --broadcast --verify
+$ forge-script script/nty-10a.s.sol --broadcast --verify
+```
+
+#### Transfer Roles
+
+```shell
+$ forge-script script/moe-10a.role.s.sol --broadcast
+$ forge-script script/nft-10a.role.s.sol --broadcast
+$ forge-script script/ppt-10a.role.s.sol --broadcast
+$ forge-script script/sov-10a.role.s.sol --broadcast
+$ forge-script script/mty-10a.role.s.sol --broadcast
+$ forge-script script/nty-10a.role.s.sol --broadcast
 ```
 
 ### Verify
@@ -64,12 +74,12 @@ $ CHAIN_ID=43114 # default; or: 43113 for testnet
 ```
 
 ```shell
-$ ./verify/moe-v9c.sh [$CHAIN_ID]
-$ ./verify/nft-v9c.sh [$CHAIN_ID]
-$ ./verify/ppt-v9c.sh [$CHAIN_ID]
-$ ./verify/sov-v9c.sh [$CHAIN_ID]
-$ ./verify/mty-v9c.sh [$CHAIN_ID]
-$ ./verify/pty-v9c.sh [$CHAIN_ID]
+$ ./verify/moe-10a.sh [$CHAIN_ID]
+$ ./verify/nft-10a.sh [$CHAIN_ID]
+$ ./verify/ppt-10a.sh [$CHAIN_ID]
+$ ./verify/sov-10a.sh [$CHAIN_ID]
+$ ./verify/mty-10a.sh [$CHAIN_ID]
+$ ./verify/nty-10a.sh [$CHAIN_ID]
 ```
 
 ### Cast
@@ -88,4 +98,4 @@ $ cast --help
 
 ## Copyright
 
-© 2024 [Moorhead LLC](#)
+© 2025 [Moorhead LLC](#)
