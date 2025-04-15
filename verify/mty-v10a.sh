@@ -2,17 +2,12 @@
 source .env
 
 CHAIN_ID=${1-"43114"} # use 43113 (for testnet)
-CTOR_ARGS=$(cast abi-encode "constructor(address,address,address)" \
-    $XPOW_MOE_V9c \
-    $XPOW_SOV_V9c \
-    $XPOW_PPT_V9c \
-)
 
 forge verify-contract \
     --chain-id $CHAIN_ID \
-    --constructor-args $CTOR_ARGS \
+    --guess-constructor-args \
     --etherscan-api-key $ETHERSCAN_API_KEY \
-    --compiler-version v0.8.20+commit.a1b79de6 \
+    --compiler-version v0.8.29+commit.ab55807c \
     --watch \
-    $XPOW_MTY_V9c \
+    $XPOW_MTY_10a \
     source/contracts/MoeTreasury.sol:MoeTreasury
