@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0
-// solhint-disable not-rely-on-time
-// solhint-disable reason-string
 pragma solidity ^0.8.29;
 
 import {APower} from "./APower.sol";
