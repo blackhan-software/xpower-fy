@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0
-// solhint-disable reason-string
 pragma solidity ^0.8.29;
 
 import {NftBase} from "./base/NftBase.sol";
