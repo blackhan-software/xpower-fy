@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 // solhint-disable not-rely-on-time
-pragma solidity 0.8.20;
+pragma solidity ^0.8.29;
 
 import {Constants} from "./Constants.sol";
 
