@@ -1,0 +1,21 @@
+{
+  "author": {
+    "email": "development@blackhan.com",
+    "name": "Blackhan Software Ltd",
+    "url": "https://github.com/blackhan-software"
+  },
+  "description": "PoW Token",
+  "keywords": [
+    "proof-of-work",
+    "token",
+    "defi"
+  ],
+  "license": "GPL-3.0",
+  "name": "xpower",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blackhan-software/xpower-fy.git"
+  },
+  "version": "9.2.0"
+}
