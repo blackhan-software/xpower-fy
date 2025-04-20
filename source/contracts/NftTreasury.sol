@@ -3,27 +3,27 @@ pragma solidity ^0.8.29;
 
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
-import {XPowerNft} from "./XPowerNft.sol";
-import {XPowerPpt} from "./XPowerPpt.sol";
 import {MoeTreasury} from "./MoeTreasury.sol";
+import {XPowerNft} from "./XPowerNft.sol";
+import {APowerNft} from "./APowerNft.sol";
 
 /**
  * NFT treasury to stake and unstake XPowerNft(s).
  */
 contract NftTreasury is ERC1155Holder {
     /** normal NFTs */
-    XPowerNft private _nft;
+    XPowerNft private immutable _nft;
     /** staked NFTs */
-    XPowerPpt private _ppt;
+    APowerNft private immutable _ppt;
     /** MOE treasury */
-    MoeTreasury private _mty;
+    MoeTreasury private immutable _mty;
 
     /** @param nftLink address of contract for normal NFTs */
     /** @param pptLink address of contract for staked NFTs */
     /** @param mtyLink address of contract for MOE treasury */
     constructor(address nftLink, address pptLink, address mtyLink) {
         _nft = XPowerNft(nftLink);
-        _ppt = XPowerPpt(pptLink);
+        _ppt = APowerNft(pptLink);
         _mty = MoeTreasury(mtyLink);
     }
 

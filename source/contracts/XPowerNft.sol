@@ -10,7 +10,7 @@ import {XPower} from "./XPower.sol";
  */
 contract XPowerNft is NftBase {
     /** burnable proof-of-work tokens */
-    XPower private _moe;
+    XPower private immutable _moe;
 
     /** @param moeLink address of MOE tokens */
     /** @param nftUri metadata URI */
@@ -35,16 +35,19 @@ contract XPowerNft is NftBase {
         _mint(account, idBy(year(), level), amount, "");
     }
 
+    // slither-disable-next-line arbitrary-send-erc20
     function _depositFrom(
         address account,
         uint256 level,
         uint256 amount
     ) private {
         uint256 moeAmount = amount * denominationOf(level);
-        _moe.transferFrom(
-            account,
-            address(this),
-            moeAmount * 10 ** _moe.decimals()
+        assert(
+            _moe.transferFrom(
+                account,
+                address(this),
+                moeAmount * 10 ** _moe.decimals()
+            )
         );
     }
 
@@ -85,11 +88,12 @@ contract XPowerNft is NftBase {
     function _redeemTo(address account, uint256 id, uint256 amount) private {
         require(_redeemable(id), "irredeemable issue");
         uint256 moeAmount = amount * denominationOf(levelOf(id));
-        _moe.transfer(account, moeAmount * 10 ** _moe.decimals());
+        assert(_moe.transfer(account, moeAmount * 10 ** _moe.decimals()));
     }
 
     function _redeemable(uint256 id) private view returns (bool) {
-        return yearOf(id) + 2 ** (levelOf(id) / 3) - 1 <= year() || migratable();
+        return
+            yearOf(id) + 2 ** (levelOf(id) / 3) - 1 <= year() || migratable();
     }
 
     /** burn NFTs during migration */
@@ -103,6 +107,7 @@ contract XPowerNft is NftBase {
         _migrateDeposit(account, id, amount, index);
     }
 
+    // slither-disable-next-line unused-return
     function _migrateDeposit(
         address account,
         uint256 id,
@@ -117,7 +122,7 @@ contract XPowerNft is NftBase {
         uint256 newAmount = _moe.balanceOf(account);
         if (newAmount > oldAmount) {
             uint256 migAmount = newAmount - oldAmount;
-            _moe.transferFrom(account, address(this), migAmount);
+            assert(_moe.transferFrom(account, address(this), migAmount));
         }
     }
 
@@ -135,6 +140,7 @@ contract XPowerNft is NftBase {
         _mintBatch(account, idsBy(year(), levels), amounts, "");
     }
 
+    // slither-disable-next-line arbitrary-send-erc20
     function _depositFromBatch(
         address account,
         uint256[] memory levels,
@@ -144,10 +150,12 @@ contract XPowerNft is NftBase {
         for (uint256 i = 0; i < levels.length; i++) {
             sumAmount += amounts[i] * denominationOf(levels[i]);
         }
-        _moe.transferFrom(
-            account,
-            address(this),
-            sumAmount * 10 ** _moe.decimals()
+        assert(
+            _moe.transferFrom(
+                account,
+                address(this),
+                sumAmount * 10 ** _moe.decimals()
+            )
         );
     }
 
@@ -173,7 +181,7 @@ contract XPowerNft is NftBase {
         for (uint256 i = 0; i < ids.length; i++) {
             totalAmount += amounts[i] * denominationOf(levelOf(ids[i]));
         }
-        _moe.transfer(account, totalAmount * 10 ** _moe.decimals());
+        assert(_moe.transfer(account, totalAmount * 10 ** _moe.decimals()));
     }
 
     /** upgrade NFTs */

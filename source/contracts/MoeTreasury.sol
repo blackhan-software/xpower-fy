@@ -1,34 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
+import {APowerNft} from "./APowerNft.sol";
 import {APower} from "./APower.sol";
 import {XPower} from "./XPower.sol";
-import {XPowerPpt} from "./XPowerPpt.sol";
 
-import {Array} from "./libs/Array.sol";
-import {Constants} from "./libs/Constants.sol";
-import {Integrator} from "./libs/Integrator.sol";
 import {Polynomial, Polynomials} from "./libs/Polynomials.sol";
+import {Integrator} from "./libs/Integrator.sol";
+import {Constants} from "./libs/Constants.sol";
+import {Array} from "./libs/Array.sol";
 import {Power} from "./libs/Power.sol";
+import {Banq} from "./libs/Banq.sol";
 import {Rpp} from "./libs/Rpp.sol";
-import {MoeTreasurySupervised} from "./base/Supervised.sol";
 
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {MoeTreasurySupervised} from "./base/Supervised.sol";
 
 /**
  * Treasury to mint (SoV) tokens for staked XPowerNft(s).
  */
-contract MoeTreasury is MoeTreasurySupervised, Ownable {
+contract MoeTreasury is MoeTreasurySupervised, Ownable, ReentrancyGuard, Banq {
     using Integrator for Integrator.Item[];
     using Polynomials for Polynomial;
 
     /** (burnable) proof-of-work tokens */
-    XPower private _moe;
+    XPower private immutable _moe;
     /** (burnable) *aged* XPower tokens */
-    APower private _sov;
+    APower private immutable _sov;
     /** staked proof-of-work NFTs */
-    XPowerPpt private _ppt;
+    APowerNft private immutable _ppt;
 
     /** map of rewards claimed: account => nft-id => amount */
     mapping(address => mapping(uint256 => uint256)) private _claimed;
@@ -38,10 +41,14 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     /** @param moeLink address of contract for XPower tokens */
     /** @param sovLink address of contract for APower tokens */
     /** @param pptLink address of contract for staked NFTs */
-    constructor(address moeLink, address sovLink, address pptLink) {
+    constructor(
+        address moeLink,
+        address sovLink,
+        address pptLink
+    ) Banq(sovLink) {
         _moe = XPower(moeLink);
         _sov = APower(sovLink);
-        _ppt = XPowerPpt(pptLink);
+        _ppt = APowerNft(pptLink);
         transferOwnership(pptLink);
         _ppt.init(address(this));
     }
@@ -52,9 +59,11 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
         uint256 nftId,
         uint256 balanceOld,
         uint256 balanceNew
-    ) public onlyOwner {
+    ) external onlyOwner {
         _claimed[account][nftId] = Math.mulDiv(
-            _claimed[account][nftId], balanceNew, balanceOld
+            _claimed[account][nftId],
+            balanceNew,
+            balanceOld
         );
     }
 
@@ -70,7 +79,7 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     function mintedBatch(
         address account,
         uint256[] memory nftIds
-    ) public view returns (uint256[] memory) {
+    ) external view returns (uint256[] memory) {
         uint256[] memory mintedRewards = new uint256[](nftIds.length);
         for (uint256 i = 0; i < nftIds.length; i++) {
             mintedRewards[i] = minted(account, nftIds[i]);
@@ -82,7 +91,7 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     function mintable(
         address account,
         uint256 nftId
-    ) public view returns (uint256) {
+    ) external view returns (uint256) {
         return _sov.mintable(claimable(account, nftId));
     }
 
@@ -90,7 +99,7 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     function mintableBatch(
         address account,
         uint256[] memory nftIds
-    ) public view returns (uint256[] memory) {
+    ) external view returns (uint256[] memory) {
         return _sov.mintableBatch(claimableBatch(account, nftIds));
     }
 
@@ -98,33 +107,45 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     event Claim(address account, uint256 nftId, uint256 amount);
 
     /** claim APower tokens */
-    function claim(address account, uint256 nftId) external {
-        uint256 amount = claimable(account, nftId);
-        require(amount > 0, "invalid claimable");
-        _claimed[account][nftId] += amount;
-        _minted[account][nftId] += _sov.mintable(amount);
-        _moe.increaseAllowance(address(_sov), _sov.wrappable(amount));
-        _sov.mint(account, amount);
-        emit Claim(account, nftId, amount);
+    function claim(
+        address account,
+        uint256 nftId,
+        uint256 amount,
+        uint256 nonce
+    ) external nonReentrant banq(account, amount, nonce) {
+        uint256 moe_amount = claimable(account, nftId);
+        _claimed[account][nftId] += moe_amount;
+        uint256 moe_wrap = _sov.wrappable(moe_amount);
+        assert(_moe.increaseAllowance(address(_sov), moe_wrap));
+        uint256 sov_amount = _sov.mint(address(this), moe_amount);
+        require(sov_amount > 0, "invalid claim");
+        _minted[account][nftId] += sov_amount;
+        emit Claim(account, nftId, sov_amount);
     }
 
     /** emitted on claiming NFT rewards */
     event ClaimBatch(address account, uint256[] nftIds, uint256[] amounts);
 
     /** claim APower tokens */
-    function claimBatch(address account, uint256[] memory nftIds) external {
+    // slither-disable-next-line reentrancy-no-eth
+    function claimBatch(
+        address account,
+        uint256[] memory nftIds,
+        uint256 amount,
+        uint256 nonce
+    ) external nonReentrant banq(account, amount, nonce) {
         require(Array.unique(nftIds), "unsorted or duplicate ids");
-        uint256[] memory amounts = claimableBatch(account, nftIds);
+        uint256[] memory moe_amounts = claimableBatch(account, nftIds);
+        uint256[] memory sov_amounts = new uint256[](nftIds.length);
         for (uint256 i = 0; i < nftIds.length; i++) {
-            require(amounts[i] > 0, "invalid claimables");
+            _claimed[account][nftIds[i]] += moe_amounts[i];
+            uint256 moe_wrap = _sov.wrappable(moe_amounts[i]);
+            assert(_moe.increaseAllowance(address(_sov), moe_wrap));
+            sov_amounts[i] = _sov.mint(address(this), moe_amounts[i]);
+            require(sov_amounts[i] > 0, "invalid claims");
+            _minted[account][nftIds[i]] += sov_amounts[i];
         }
-        for (uint256 i = 0; i < nftIds.length; i++) {
-            _claimed[account][nftIds[i]] += amounts[i];
-            _minted[account][nftIds[i]] += _sov.mintable(amounts[i]);
-            _moe.increaseAllowance(address(_sov), _sov.wrappable(amounts[i]));
-            _sov.mint(account, amounts[i]);
-        }
-        emit ClaimBatch(account, nftIds, amounts);
+        emit ClaimBatch(account, nftIds, sov_amounts);
     }
 
     /** @return claimed amount */
@@ -183,11 +204,9 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     ) public view returns (uint256) {
         uint256 age = _ppt.ageOf(account, nftId);
         uint256 rate = aprOf(nftId) + apbOf(nftId);
+        uint256 reward = rate * age * 10 ** _moe.decimals();
         uint256 denomination = _ppt.denominationOf(_ppt.levelOf(nftId));
-        return Math.mulDiv(
-            rate * age * 10 ** _moe.decimals(),
-            denomination, 1e6 * Constants.CENTURY
-        );
+        return Math.mulDiv(reward, denomination, 1e6 * Constants.CENTURY);
     }
 
     /** @return reward amounts */
@@ -239,7 +258,7 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
     }
 
     /** annual percentage rate: 3.375000[%] (per nft.level) */
-    uint256 public constant APR_MUL = 3_375_000;
+    uint256 private constant APR_MUL = 3_375_000;
     uint256 private constant APR_DIV = 3;
     uint256 private constant APR_EXP = 256;
 
@@ -440,8 +459,8 @@ contract MoeTreasury is MoeTreasurySupervised, Ownable {
         return 0;
     }
 
-    /** annual percentage bonus: 1.0000[‱] (per nft.year) */
-    uint256 private constant APB_MUL = 10_000;
+    /** annual percentage bonus: 1.000000[‰] (per nft.year) */
+    uint256 private constant APB_MUL = 100_000;
     uint256 private constant APB_DIV = 1;
     uint256 private constant APB_EXP = 256;
 

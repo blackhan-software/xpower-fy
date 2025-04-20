@@ -15,7 +15,10 @@ library Polynomials {
      * Evaluates a `value` using a linear function -- defined by
      * the provided polynomial coefficients.
      */
-    function eval6(Polynomial memory p, uint256 value) internal pure returns (uint256) {
+    function eval6(
+        Polynomial memory p,
+        uint256 value
+    ) internal pure returns (uint256) {
         uint256 delta = value + p.array[5] - p.array[4];
         uint256 ratio = Math.mulDiv(delta, p.array[3], p.array[2]);
         uint256 shift = ratio + p.array[1] - p.array[0];
@@ -28,7 +31,10 @@ library Polynomials {
      * Evaluates a `value` using a linear function -- defined by
      * the provided polynomial coefficients.
      */
-    function eval5(Polynomial memory p, uint256 value) internal pure returns (uint256) {
+    function eval5(
+        Polynomial memory p,
+        uint256 value
+    ) internal pure returns (uint256) {
         uint256 delta = value + p.array[4] - p.array[3];
         uint256 ratio = Math.mulDiv(delta, p.array[2], p.array[1]);
         return Power.raise(ratio + p.array[0], p.array[5]);
@@ -40,7 +46,10 @@ library Polynomials {
      * Evaluates a `value` using a linear function -- defined by
      * the provided polynomial coefficients.
      */
-    function eval4(Polynomial memory p, uint256 value) internal pure returns (uint256) {
+    function eval4(
+        Polynomial memory p,
+        uint256 value
+    ) internal pure returns (uint256) {
         uint256 ratio = Math.mulDiv(value, p.array[3], p.array[2]);
         uint256 shift = ratio + p.array[1] - p.array[0];
         return Power.raise(shift, p.array[4]);
@@ -52,7 +61,10 @@ library Polynomials {
      * Evaluates a `value` using a linear function -- defined by
      * the provided polynomial coefficients.
      */
-    function eval3(Polynomial memory p, uint256 value) internal pure returns (uint256) {
+    function eval3(
+        Polynomial memory p,
+        uint256 value
+    ) internal pure returns (uint256) {
         uint256 ratio = Math.mulDiv(value, p.array[2], p.array[1]);
         return Power.raise(ratio + p.array[0], p.array[3]);
     }

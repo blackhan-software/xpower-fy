@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {ERC1155Burnable} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 import {Supervised, NftMigratableSupervised} from "./Supervised.sol";
 
@@ -10,13 +10,17 @@ import {Supervised, NftMigratableSupervised} from "./Supervised.sol";
  * Allows migration of NFTs from an old contract; batch migration is also
  * possible. Further, manually sealing the migration is possible too.
  */
-abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSupervised {
+abstract contract NftMigratable is
+    ERC1155,
+    ERC1155Burnable,
+    NftMigratableSupervised
+{
     /** burnable ERC1155 tokens */
     ERC1155Burnable[] private _base;
     /** base address to index map */
     mapping(address => uint256) private _index;
     /** timestamp of immigration deadline */
-    uint256 private _deadlineBy;
+    uint256 private immutable _deadlineBy;
     /** flag to seal immigration */
     bool[] private _sealed;
     /** flag to open emigration */
@@ -51,7 +55,11 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
      * @param amount of ERC1155s to migrate
      * @param index pair of [nft_index, moe_index]
      */
-    function migrate(uint256 nftId, uint256 amount, uint256[] memory index) external {
+    function migrate(
+        uint256 nftId,
+        uint256 amount,
+        uint256[] memory index
+    ) external {
         _migrateFrom(msg.sender, nftId, amount, index);
     }
 
@@ -63,7 +71,12 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
      * @param amount of ERC1155s to migrate
      * @param index pair of [nft_index, moe_index]
      */
-    function migrateFrom(address account, uint256 nftId, uint256 amount, uint256[] memory index) external {
+    function migrateFrom(
+        address account,
+        uint256 nftId,
+        uint256 amount,
+        uint256[] memory index
+    ) external {
         require(
             account == msg.sender || approvedMigrate(account, msg.sender),
             "caller is not token owner or approved"
@@ -100,14 +113,24 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
     );
 
     /** migrate amount of ERC1155 */
-    function _migrateFrom(address account, uint256 nftId, uint256 amount, uint256[] memory index) internal {
+    function _migrateFrom(
+        address account,
+        uint256 nftId,
+        uint256 amount,
+        uint256[] memory index
+    ) internal {
         require(_deadlineBy >= block.timestamp, "deadline passed");
         _burnFrom(account, nftId, amount, index);
         _mint(account, nftId, amount, "");
     }
 
     /** burn amount of ERC1155 */
-    function _burnFrom(address account, uint256 nftId, uint256 amount, uint256[] memory index) internal virtual {
+    function _burnFrom(
+        address account,
+        uint256 nftId,
+        uint256 amount,
+        uint256[] memory index
+    ) internal virtual {
         require(!_sealed[index[0]], "migration sealed");
         uint256 tryId = nftId + 2_000_000; // older ID format
         uint256 tryBalance = _base[index[0]].balanceOf(account, tryId);
@@ -121,7 +144,11 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
      * @param amounts of ERC1155s to migrate
      * @param index pair of [nft_index, moe_index]
      */
-    function migrateBatch(uint256[] memory nftIds, uint256[] memory amounts, uint256[] memory index) external {
+    function migrateBatch(
+        uint256[] memory nftIds,
+        uint256[] memory amounts,
+        uint256[] memory index
+    ) external {
         _migrateFromBatch(msg.sender, nftIds, amounts, index);
     }
 
@@ -174,7 +201,8 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
 
     /** seal-all immigration */
     function sealAll() external onlyRole(NFT_SEAL_ROLE) {
-        for (uint256 i = 0; i < _sealed.length; i++) {
+        uint256 length = _sealed.length;
+        for (uint256 i = 0; i < length; i++) {
             _sealed[i] = true;
         }
         emit SealAll();
@@ -211,7 +239,9 @@ abstract contract NftMigratable is ERC1155, ERC1155Burnable, NftMigratableSuperv
     }
 
     /** @return true if this contract implements the interface defined by interface-id */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155, Supervised) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(ERC1155, Supervised) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }

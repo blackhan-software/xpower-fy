@@ -1,28 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {XPower} from "./XPower.sol";
 import {SovMigratable} from "./base/Migratable.sol";
+import {XPower} from "./XPower.sol";
 
 /**
- * Class for the APOW tokens, where only the owner of the contract i.e. the
- * MoeTreasury is entitled to mint them -- with a supply rate of on average
- * one token per minute.
+ * Class for the APOW tokens, where only the owner of the contract i.e.
+ * the MoeTreasury is entitled to mint them — with a supply rate of (at
+ * least) on average one token per minute.
  */
-contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
+contract APower is ERC20Permit, ERC20Burnable, SovMigratable, Ownable {
     /** timestamp of contract deployment (absolute) */
-    uint256 private _timestamp = block.timestamp;
+    uint256 private immutable _timestamp = block.timestamp;
+    /** (burnable) XPower */
+    XPower private immutable _moe;
+
     /** timestamp of last mean (relative) */
     uint256 private _time;
     /** last mean of claims */
     uint256 private _mean;
-    /** (burnable) XPower */
-    XPower private _moe;
 
     /** @param moeLink address of XPower tokens */
     /** @param sovBase address of old contract */
@@ -34,6 +36,8 @@ contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
     )
         // ERC20 constructor: name, symbol
         ERC20("APower", "APOW")
+        // ERC20Permit constructor: name
+        ERC20Permit("APower")
         // Migratable: XPower, old APower & rel. deadline [seconds]
         SovMigratable(moeLink, sovBase, deadlineIn)
     {
@@ -46,11 +50,15 @@ contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
     }
 
     /** mint on average one APower/min (after wrapping XPower) */
-    function mint(address to, uint256 claim) external onlyOwner {
+    function mint(
+        address to,
+        uint256 claim
+    ) external onlyOwner returns (uint256) {
         assert(_moe.transferFrom(owner(), address(this), wrappable(claim)));
         (uint256 a, uint256 m, uint256 t) = _mintable(claim, _mean, _time);
         (_mean, _time) = (m, t);
         _mint(to, a);
+        return a;
     }
 
     /** @return wrappable XPower targeting a ratio of 1:1 (at most) */
@@ -90,8 +98,9 @@ contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
     ) private view returns (uint256, uint256, uint256) {
         if (claim > 0) {
             uint256 t = block.timestamp - _timestamp;
-            uint256 m = Math.mulDiv(mean, time, t) + claim / t;
-            uint256 a = Math.mulDiv(claim, 10 ** decimals() / 60, m);
+            uint256 c = Math.sqrt(claim); // ⚒️-regression
+            uint256 m = Math.mulDiv(mean, time, t) + c / t;
+            uint256 a = Math.mulDiv(c, 10 ** decimals() / 60, m);
             return (a, m, t);
         }
         return (0, mean, time);
@@ -100,7 +109,7 @@ contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
     /** burn amount of tokens from caller (and then unwrap XPower) */
     function burn(uint256 amount) public override {
         super.burn(amount);
-        _moe.transfer(msg.sender, unwrappable(amount));
+        assert(_moe.transfer(msg.sender, unwrappable(amount)));
     }
 
     /**
@@ -109,7 +118,7 @@ contract APower is ERC20, ERC20Burnable, SovMigratable, Ownable {
      */
     function burnFrom(address account, uint256 amount) public override {
         super.burnFrom(account, amount);
-        _moe.transfer(account, unwrappable(amount));
+        assert(_moe.transfer(account, unwrappable(amount)));
     }
 
     /** @return unwrappable XPower proportional to burned APower amount */

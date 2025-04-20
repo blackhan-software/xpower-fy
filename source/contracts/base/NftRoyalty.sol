@@ -30,6 +30,7 @@ abstract contract NftRoyalty is IERC2981, NftRoyaltySupervised {
 
     /** set default royalty beneficiary */
     function setRoyal(address beneficiary) external onlyRole(NFT_ROYAL_ROLE) {
+        require(beneficiary != address(0), "zero address");
         _royal = beneficiary;
         emit SetRoyal(beneficiary);
     }

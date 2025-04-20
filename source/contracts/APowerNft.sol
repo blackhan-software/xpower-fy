@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {NftBase} from "./base/NftBase.sol";
-import {MoeTreasury} from "./MoeTreasury.sol";
-
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import {MoeTreasury} from "./MoeTreasury.sol";
+import {NftBase} from "./base/NftBase.sol";
+
 /**
- * Abstract base class for staked XPowerNft(s): Only the contract owner
- * i.e. the NftTreasury is allowed to mint and burn XPowerPpt tokens.
+ * Abstract base class for staked XPowerNft(s): Only the contract
+ * owner, the NftTreasury, is allowed to mint and burn APowerNfts.
  */
-contract XPowerPpt is NftBase {
+contract APowerNft is NftBase, ReentrancyGuard {
     /** map of age: account => nft-id => accumulator [seconds] */
     mapping(address => mapping(uint256 => uint256)) private _age;
     /** map of levels: nft-level => accumulator */
@@ -23,7 +24,7 @@ contract XPowerPpt is NftBase {
         string memory pptUri,
         address[] memory pptBase,
         uint256 deadlineIn
-    ) NftBase("XPower PPTs", "XPOWPPT", pptUri, pptBase, deadlineIn) {}
+    ) NftBase("APower NFTs", "APOWNFT", pptUri, pptBase, deadlineIn) {}
 
     /** MOE treasury */
     MoeTreasury private _mty;
@@ -38,26 +39,28 @@ contract XPowerPpt is NftBase {
     event Init(address mty);
 
     /** transfer tokens (and reset age) */
+    // slither-disable-next-line reentrancy-no-eth
     function safeTransferFrom(
         address account,
         address to,
         uint256 nftId,
         uint256 amount,
         bytes memory data
-    ) public override {
+    ) public override nonReentrant {
         _pushBurn(account, nftId, amount);
         _pushMint(to, nftId, amount);
         super.safeTransferFrom(account, to, nftId, amount, data);
     }
 
     /** batch transfer tokens (and reset age) */
+    // slither-disable-next-line reentrancy-no-eth
     function safeBatchTransferFrom(
         address account,
         address to,
         uint256[] memory nftIds,
         uint256[] memory amounts,
         bytes memory data
-    ) public override {
+    ) public override nonReentrant {
         _pushBurnBatch(account, nftIds, amounts);
         _pushMintBatch(to, nftIds, amounts);
         super.safeBatchTransferFrom(account, to, nftIds, amounts, data);
