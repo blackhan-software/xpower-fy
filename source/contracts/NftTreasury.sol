@@ -3,27 +3,33 @@ pragma solidity ^0.8.29;
 
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
-import {XPowerNft} from "./XPowerNft.sol";
-import {XPowerPpt} from "./XPowerPpt.sol";
 import {MoeTreasury} from "./MoeTreasury.sol";
+import {XPowerNft} from "./XPowerNft.sol";
+import {APowerNft} from "./APowerNft.sol";
+
+import {Supervised} from "./base/Supervised.sol";
+import {Constant} from "./libs/Constant.sol";
 
 /**
  * NFT treasury to stake and unstake XPowerNft(s).
  */
 contract NftTreasury is ERC1155Holder {
+    /** protocol version */
+    uint256 public constant VERSION = Constant.VERSION;
+
     /** normal NFTs */
-    XPowerNft private _nft;
+    XPowerNft private immutable _nft;
     /** staked NFTs */
-    XPowerPpt private _ppt;
+    APowerNft private immutable _ppt;
     /** MOE treasury */
-    MoeTreasury private _mty;
+    MoeTreasury private immutable _mty;
 
     /** @param nftLink address of contract for normal NFTs */
     /** @param pptLink address of contract for staked NFTs */
     /** @param mtyLink address of contract for MOE treasury */
     constructor(address nftLink, address pptLink, address mtyLink) {
         _nft = XPowerNft(nftLink);
-        _ppt = XPowerPpt(pptLink);
+        _ppt = APowerNft(pptLink);
         _mty = MoeTreasury(mtyLink);
     }
 
@@ -34,9 +40,9 @@ contract NftTreasury is ERC1155Holder {
     function stake(address account, uint256 nftId, uint256 amount) external {
         require(
             account == msg.sender || approvedStake(account, msg.sender),
-            "caller is not token owner or approved"
+            Supervised.UnauthorizedAccount(account)
         );
-        require(amount > 0, "invalid amount");
+        require(amount > 0, InvalidAmount(amount));
         _nft.safeTransferFrom(account, address(this), nftId, amount, "");
         _ppt.mint(account, nftId, amount);
         emit Stake(account, nftId, amount);
@@ -54,10 +60,10 @@ contract NftTreasury is ERC1155Holder {
     ) external {
         require(
             account == msg.sender || approvedStake(account, msg.sender),
-            "caller is not token owner or approved"
+            Supervised.UnauthorizedAccount(account)
         );
         for (uint256 i = 0; i < amounts.length; i++) {
-            require(amounts[i] > 0, "invalid amounts");
+            require(amounts[i] > 0, InvalidAmount(amounts[i]));
         }
         _nft.safeBatchTransferFrom(account, address(this), nftIds, amounts, "");
         _ppt.mintBatch(account, nftIds, amounts);
@@ -67,7 +73,7 @@ contract NftTreasury is ERC1155Holder {
 
     /** approve staking by `operator` */
     function approveStake(address operator, bool approved) external {
-        require(msg.sender != operator, "approving staking for self");
+        require(msg.sender != operator, Supervised.SelfApproving(operator));
         _stakingApprovals[msg.sender][operator] = approved;
         emit ApproveStaking(msg.sender, operator, approved);
     }
@@ -100,7 +106,7 @@ contract NftTreasury is ERC1155Holder {
     function unstake(address account, uint256 nftId, uint256 amount) external {
         require(
             account == msg.sender || approvedUnstake(account, msg.sender),
-            "caller is not token owner or approved"
+            Supervised.UnauthorizedAccount(account)
         );
         _ppt.burn(account, nftId, amount);
         _nft.safeTransferFrom(address(this), account, nftId, amount, "");
@@ -119,7 +125,7 @@ contract NftTreasury is ERC1155Holder {
     ) external {
         require(
             account == msg.sender || approvedUnstake(account, msg.sender),
-            "caller is not token owner or approved"
+            Supervised.UnauthorizedAccount(account)
         );
         _ppt.burnBatch(account, nftIds, amounts);
         _nft.safeBatchTransferFrom(address(this), account, nftIds, amounts, "");
@@ -129,7 +135,7 @@ contract NftTreasury is ERC1155Holder {
 
     /** approve unstaking by `operator` */
     function approveUnstake(address operator, bool approved) external {
-        require(msg.sender != operator, "approving unstaking for self");
+        require(msg.sender != operator, Supervised.SelfApproving(operator));
         _unstakingApprovals[msg.sender][operator] = approved;
         emit ApproveUnstaking(msg.sender, operator, approved);
     }
@@ -154,4 +160,7 @@ contract NftTreasury is ERC1155Holder {
         address indexed operator,
         bool approved
     );
+
+    /** Thrown on invalid amount. */
+    error InvalidAmount(uint256 amount);
 }

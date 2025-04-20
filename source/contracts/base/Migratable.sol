@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {ERC20, IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {Supervised, MoeMigratableSupervised, SovMigratableSupervised} from "./Supervised.sol";
+import {ERC20, IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
+import {Supervised, MoeMigratableSupervised, SovMigratableSupervised} from "./Supervised.sol";
+import {Banq} from "../libs/Banq.sol";
 
 /**
  * Allows migration of tokens from an old contract upto a certain deadline.
@@ -12,12 +15,13 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
  * the specified deadline.
  */
 abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
+    /** timestamp of immigration deadline */
+    uint256 private immutable _deadlineBy;
+
     /** burnable ERC20 tokens */
     ERC20Burnable[] private _base;
     /** base address to index map */
     mapping(address => uint256) private _index;
-    /** timestamp of immigration deadline */
-    uint256 private _deadlineBy;
     /** flag to seal immigration */
     bool[] private _sealed;
     /** number of immigrated tokens */
@@ -72,14 +76,14 @@ abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
     ) external returns (uint256) {
         require(
             account == msg.sender || approvedMigrate(account, msg.sender),
-            "caller is not token owner or approved"
+            UnauthorizedAccount(account)
         );
         return _migrateFrom(account, amount, index);
     }
 
     /** approve migrate by `operator` */
     function approveMigrate(address operator, bool approved) external {
-        require(msg.sender != operator, "approving migrate for self");
+        require(msg.sender != operator, SelfApproving(operator));
         _migrateApprovals[msg.sender][operator] = approved;
         emit ApproveMigrate(msg.sender, operator, approved);
     }
@@ -111,13 +115,11 @@ abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
         uint256 amount,
         uint256[] memory index
     ) internal virtual returns (uint256) {
-        uint256 minAmount = Math.min(
-            amount,
-            _base[index[0]].balanceOf(account)
-        );
-        uint256 newAmount = _premigrate(account, minAmount, index[0]);
-        _mint(account, newAmount);
-        return newAmount;
+        uint256 idx_balance = _base[index[0]].balanceOf(account);
+        uint256 min_amount = Math.min(amount, idx_balance);
+        uint256 new_amount = _premigrate(account, min_amount, index[0]);
+        _mint(account, new_amount);
+        return new_amount;
     }
 
     /** migrate amount of ERC20 tokens */
@@ -126,45 +128,43 @@ abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
         uint256 amount,
         uint256 index
     ) internal returns (uint256) {
-        require(!_sealed[index], "migration sealed");
-        uint256 timestamp = block.timestamp;
-        require(_deadlineBy >= timestamp, "deadline passed");
+        require(!_sealed[index], MigrationSealed(index));
+        require(_deadlineBy >= block.timestamp, DeadlinePassed(_deadlineBy));
         _base[index].burnFrom(account, amount);
-        assert(amount > 0 || amount == 0);
-        uint256 newAmount = newUnits(amount, index);
-        _migrated += newAmount;
-        return newAmount;
+        uint256 new_amount = newUnits(amount, index);
+        _migrated += new_amount;
+        return new_amount;
     }
 
     /**
-     * @param oldAmount to convert from
+     * @param old_amount to convert from
      * @param index of base contract
      * @return forward converted new amount w.r.t. decimals
      */
     function newUnits(
-        uint256 oldAmount,
+        uint256 old_amount,
         uint256 index
     ) public view returns (uint256) {
         if (decimals() >= _base[index].decimals()) {
-            return oldAmount * (10 ** (decimals() - _base[index].decimals()));
+            return old_amount * (10 ** (decimals() - _base[index].decimals()));
         } else {
-            return oldAmount / (10 ** (_base[index].decimals() - decimals()));
+            return old_amount / (10 ** (_base[index].decimals() - decimals()));
         }
     }
 
     /**
-     * @param newAmount to convert from
+     * @param new_amount to convert from
      * @param index of base contract
      * @return backward converted old amount w.r.t. decimals
      */
     function oldUnits(
-        uint256 newAmount,
+        uint256 new_amount,
         uint256 index
     ) public view returns (uint256) {
         if (decimals() >= _base[index].decimals()) {
-            return newAmount / (10 ** (decimals() - _base[index].decimals()));
+            return new_amount / (10 ** (decimals() - _base[index].decimals()));
         } else {
-            return newAmount * (10 ** (_base[index].decimals() - decimals()));
+            return new_amount * (10 ** (_base[index].decimals() - decimals()));
         }
     }
 
@@ -187,7 +187,8 @@ abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
 
     /** seal-all immigration */
     function _sealAll() internal {
-        for (uint256 i = 0; i < _sealed.length; i++) {
+        uint256 length = _sealed.length;
+        for (uint256 i = 0; i < length; i++) {
             _sealed[i] = true;
         }
         emit SealAll();
@@ -209,12 +210,17 @@ abstract contract Migratable is ERC20, ERC20Burnable, Supervised {
             interfaceId == type(IERC20Metadata).interfaceId ||
             super.supportsInterface(interfaceId);
     }
+
+    /** Thrown on deadline passed. */
+    error DeadlinePassed(uint256 deadline);
+    /** Thrown on migration sealed. */
+    error MigrationSealed(uint256 index);
 }
 
 /**
  * Allows migration of MOE tokens from an old contract upto a certain deadline.
  */
-abstract contract MoeMigratable is Migratable, MoeMigratableSupervised {
+abstract contract MoeMigratable is MoeMigratableSupervised, Migratable {
     /** @param base addresses of old contracts */
     /** @param deadlineIn seconds to end-of-migration */
     constructor(
@@ -243,9 +249,14 @@ abstract contract MoeMigratable is Migratable, MoeMigratableSupervised {
 /**
  * Allows migration of SOV tokens from an old contract upto a certain deadline.
  */
-abstract contract SovMigratable is Migratable, SovMigratableSupervised {
+abstract contract SovMigratable is
+    ReentrancyGuardTransient,
+    SovMigratableSupervised,
+    Migratable,
+    Banq
+{
     /** migratable MOE tokens */
-    MoeMigratable private _moeMigratable;
+    MoeMigratable private immutable _moeMigratable;
 
     /** @param moe address of MOE tokens */
     /** @param base addresses of old contracts */
@@ -254,7 +265,12 @@ abstract contract SovMigratable is Migratable, SovMigratableSupervised {
         address moe,
         address[] memory base,
         uint256 deadlineIn
-    ) Migratable(base, deadlineIn) {
+    )
+        // Migratable constructor: old contracts, rel. deadline [seconds]
+        Migratable(base, deadlineIn)
+        // Banq constructor: APower, max. free supply
+        Banq(address(this), 0)
+    {
         _moeMigratable = MoeMigratable(moe);
     }
 
@@ -272,41 +288,52 @@ abstract contract SovMigratable is Migratable, SovMigratableSupervised {
         address account,
         uint256 amount,
         uint256[] memory index
-    ) internal override returns (uint256) {
-        uint256[] memory moeIndex = new uint256[](1);
-        moeIndex[0] = index[1]; // drop sov-index
-        uint256 newAmountSov = newUnits(amount, index[0]);
-        uint256 migAmountSov = _premigrate(account, amount, index[0]);
-        assert(migAmountSov == newAmountSov);
-        uint256 newAmountMoe = moeUnits(newAmountSov);
-        uint256 oldAmountMoe = _moeMigratable.oldUnits(newAmountMoe, moeIndex[0]);
-        uint256 migAmountMoe = _moeMigratable.migrateFrom(account, oldAmountMoe, moeIndex);
-        assert(_moeMigratable.transferFrom(account, (address)(this), migAmountMoe));
-        _mint(account, newAmountSov);
-        return newAmountSov;
+    )
+        internal
+        override
+        nonReentrant
+        banq(account, newUnits(amount, index[0]), 0)
+        returns (uint256)
+    {
+        uint256[] memory idx_moe = new uint256[](1);
+        idx_moe[0] = index[1]; // drop sov-index
+        uint256 new_sov = newUnits(amount, index[0]);
+        uint256 mig_sov = _premigrate(account, amount, index[0]);
+        assert(mig_sov == new_sov);
+        uint256 new_moe = moeUnits(new_sov);
+        uint256 old_moe = _moeMigratable.oldUnits(new_moe, idx_moe[0]);
+        uint256 mig_moe = _moeMigratable.migrateFrom(account, old_moe, idx_moe);
+        // slither-disable-next-line arbitrary-send-erc20
+        assert(_moeMigratable.transferFrom(account, address(this), mig_moe));
+        _mint(address(this), new_sov);
+        return new_sov;
     }
 
     /**
-     * @param sovAmount to convert from
+     * @param sov_amount to convert from
      * @return cross-converted MOE amount w.r.t. decimals
      */
-    function moeUnits(uint256 sovAmount) public view returns (uint256) {
+    function moeUnits(uint256 sov_amount) public view returns (uint256) {
         if (decimals() >= _moeMigratable.decimals()) {
-            return sovAmount / (10 ** (decimals() - _moeMigratable.decimals()));
+            return
+                sov_amount / (10 ** (decimals() - _moeMigratable.decimals()));
         } else {
-            return sovAmount * (10 ** (_moeMigratable.decimals() - decimals()));
+            return
+                sov_amount * (10 ** (_moeMigratable.decimals() - decimals()));
         }
     }
 
     /**
-     * @param moeAmount to convert from
+     * @param moe_amount to convert from
      * @return cross-converted SOV amount w.r.t. decimals
      */
-    function sovUnits(uint256 moeAmount) public view returns (uint256) {
+    function sovUnits(uint256 moe_amount) public view returns (uint256) {
         if (decimals() >= _moeMigratable.decimals()) {
-            return moeAmount * (10 ** (decimals() - _moeMigratable.decimals()));
+            return
+                moe_amount * (10 ** (decimals() - _moeMigratable.decimals()));
         } else {
-            return moeAmount / (10 ** (_moeMigratable.decimals() - decimals()));
+            return
+                moe_amount / (10 ** (_moeMigratable.decimals() - decimals()));
         }
     }
 

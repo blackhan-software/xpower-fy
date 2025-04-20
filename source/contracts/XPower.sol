@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
+import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-import {Constants} from "./libs/Constants.sol";
-import {FeeTracker} from "./base/FeeTracker.sol";
 import {MoeMigratable} from "./base/Migratable.sol";
+import {Constant} from "./libs/Constant.sol";
 
 /**
- * Class for the XPOW proof-of-work tokens: It verifies, that the nonce and the
- * block-hash result in a positive amount. After a successful verification, the
- * corresponding amount is minted for the beneficiary (plus the MoE treasury).
+ * Class for the XPOW proof-of-work tokens: It verifies, that the nonce
+ * and the block-hash result in a positive amount. After a verification,
+ * the corresponding amount is minted for the beneficiary (plus the MoE
+ * treasury).
  */
-contract XPower is ERC20, ERC20Burnable, FeeTracker, MoeMigratable, Ownable {
+contract XPower is ERC20Permit, ERC20Burnable, MoeMigratable, Ownable {
     /** set of nonce-hashes already minted for */
     mapping(bytes32 => bool) private _hashes;
     /** map from block-hashes to timestamps */
@@ -29,15 +30,18 @@ contract XPower is ERC20, ERC20Burnable, FeeTracker, MoeMigratable, Ownable {
         address[] memory moeBase,
         uint256 deadlineIn
     )
+        Ownable(msg.sender)
         // ERC20 constructor: name, symbol
         ERC20("XPower", "XPOW")
+        // ERC20Permit constructor: name
+        ERC20Permit("XPower")
         // MoeMigratable: old contract, rel. deadline [seconds]
         MoeMigratable(moeBase, deadlineIn)
     {}
 
     /** @return number of decimals of representation */
     function decimals() public view virtual override returns (uint8) {
-        return Constants.DECIMALS;
+        return Constant.DECIMALS;
     }
 
     /** emitted on caching most recent block-hash */
@@ -60,25 +64,21 @@ contract XPower is ERC20, ERC20Burnable, FeeTracker, MoeMigratable, Ownable {
     }
 
     /** mint tokens for to-beneficiary, block-hash & data (incl. nonce) */
-    function mint(
-        address to,
-        bytes32 blockHash,
-        bytes calldata data
-    ) external tracked {
+    function mint(address to, bytes32 blockHash, bytes calldata data) external {
         // check block-hash to be in current interval
-        require(_recent(blockHash), "expired block-hash");
+        require(_recent(blockHash), ExpiredBlockHash(blockHash));
         // calculate nonce-hash & pair-index for to, block-hash & data
         (bytes32 nonceHash, bytes32 pairIndex) = _hashOf(to, blockHash, data);
-        require(_unique(pairIndex), "duplicate nonce-hash");
+        require(_unique(pairIndex), DuplicatePairIndex(pairIndex));
         // calculate number of zeros of nonce-hash
         uint256 zeros = _zerosOf(nonceHash);
-        require(zeros > 0, "empty nonce-hash");
+        require(zeros > 0, EmptyNonceHash(nonceHash));
         // calculate amount of tokens of zeros
         uint256 amount = _amountOf(zeros);
         // ensure unique (nonce-hash, block-hash)
         _hashes[pairIndex] = true;
         // mint for contract owner
-        _mint(owner(), amount >> 3);
+        _mint(owner(), amount);
         // mint for beneficiary
         _mint(to, amount);
     }
@@ -139,13 +139,10 @@ contract XPower is ERC20, ERC20Burnable, FeeTracker, MoeMigratable, Ownable {
         return super.supportsInterface(interfaceId);
     }
 
-    /** @return fee-estimate plus averages over gas and gas-price */
-    function fees() external view returns (uint256[] memory) {
-        return _fees(FEE_ADD, FEE_MUL, FEE_DIV);
-    }
-
-    /** fee-tracker estimate: 21_000+700+1360+1088+68*8 */
-    uint256 private constant FEE_ADD = 24_692_000_000_000;
-    uint256 private constant FEE_MUL = 1_6168707436776024;
-    uint256 private constant FEE_DIV = 1_0000000000000000;
+    /** Thrown on duplicate pair-index. */
+    error DuplicatePairIndex(bytes32 pair_index);
+    /** Thrown on expired block-hash. */
+    error ExpiredBlockHash(bytes32 block_hash);
+    /** Thrown on empty nonce-hash. */
+    error EmptyNonceHash(bytes32 nonce_hash);
 }

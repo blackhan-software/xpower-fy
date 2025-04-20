@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import {ERC1155Burnable} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {Nft} from "../libs/Nft.sol";
 import {NftMigratable} from "./NftMigratable.sol";
-import {NftRoyalty} from "./NftRoyalty.sol";
 import {URIMalleable} from "./URIMalleable.sol";
+import {NftRoyalty} from "./NftRoyalty.sol";
+import {Nft} from "../libs/Nft.sol";
 
 /**
  * Abstract base NFT class: publicly *not* minteable (nor burnable).
@@ -38,9 +38,10 @@ abstract contract NftBase is
         address[] memory nftBase,
         uint256 deadlineIn
     )
+        Ownable(msg.sender)
         // ERC1155 constructor: meta-data URI
         ERC1155(nftUri)
-        // MigratableNft: old contract, rel. deadline [seconds]
+        // MigratableNft: old contracts, rel. deadline [seconds]
         NftMigratable(nftBase, deadlineIn)
     {
         name = nftName;
@@ -80,25 +81,6 @@ abstract contract NftBase is
         return Nft.year();
     }
 
-    /** called before any token transfer; includes (batched) minting and burning */
-    function _beforeTokenTransfer(
-        address operator,
-        address from,
-        address to,
-        uint256[] memory nftIds,
-        uint256[] memory amounts,
-        bytes memory data
-    ) internal override(ERC1155, ERC1155Supply) {
-        ERC1155Supply._beforeTokenTransfer(
-            operator,
-            from,
-            to,
-            nftIds,
-            amounts,
-            data
-        );
-    }
-
     /** @return URI of nft-id */
     function uri(
         uint256 nftId
@@ -123,5 +105,15 @@ abstract contract NftBase is
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+
+    /** @dev see ERC1155Supply.update */
+    function _update(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory values
+    ) internal override(ERC1155, ERC1155Supply) {
+        super._update(from, to, ids, values);
     }
 }

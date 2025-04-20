@@ -10,7 +10,7 @@ import {XPower} from "./XPower.sol";
  */
 contract XPowerNft is NftBase {
     /** burnable proof-of-work tokens */
-    XPower private _moe;
+    XPower private immutable _moe;
 
     /** @param moeLink address of MOE tokens */
     /** @param nftUri metadata URI */
@@ -29,28 +29,31 @@ contract XPowerNft is NftBase {
     function mint(address account, uint256 level, uint256 amount) external {
         require(
             account == msg.sender || approvedMint(account, msg.sender),
-            "caller is not token owner or approved"
+            UnauthorizedAccount(account)
         );
         _depositFrom(account, level, amount); // MOE transfer to vault
         _mint(account, idBy(year(), level), amount, "");
     }
 
+    // slither-disable-next-line arbitrary-send-erc20
     function _depositFrom(
         address account,
         uint256 level,
         uint256 amount
     ) private {
         uint256 moeAmount = amount * denominationOf(level);
-        _moe.transferFrom(
-            account,
-            address(this),
-            moeAmount * 10 ** _moe.decimals()
+        assert(
+            _moe.transferFrom(
+                account,
+                address(this),
+                moeAmount * 10 ** _moe.decimals()
+            )
         );
     }
 
     /** approve minting by `operator` */
     function approveMint(address operator, bool approved) external {
-        require(msg.sender != operator, "approving minting for self");
+        require(msg.sender != operator, SelfApproving(operator));
         _mintingApprovals[msg.sender][operator] = approved;
         emit ApproveMinting(msg.sender, operator, approved);
     }
@@ -83,13 +86,14 @@ contract XPowerNft is NftBase {
     }
 
     function _redeemTo(address account, uint256 id, uint256 amount) private {
-        require(_redeemable(id), "irredeemable issue");
+        require(_redeemable(id), IrredeemableIssue(id));
         uint256 moeAmount = amount * denominationOf(levelOf(id));
-        _moe.transfer(account, moeAmount * 10 ** _moe.decimals());
+        assert(_moe.transfer(account, moeAmount * 10 ** _moe.decimals()));
     }
 
     function _redeemable(uint256 id) private view returns (bool) {
-        return yearOf(id) + 2 ** (levelOf(id) / 3) - 1 <= year() || migratable();
+        return
+            yearOf(id) + 2 ** (levelOf(id) / 3) - 1 <= year() || migratable();
     }
 
     /** burn NFTs during migration */
@@ -103,6 +107,7 @@ contract XPowerNft is NftBase {
         _migrateDeposit(account, id, amount, index);
     }
 
+    // slither-disable-next-line unused-return
     function _migrateDeposit(
         address account,
         uint256 id,
@@ -117,7 +122,7 @@ contract XPowerNft is NftBase {
         uint256 newAmount = _moe.balanceOf(account);
         if (newAmount > oldAmount) {
             uint256 migAmount = newAmount - oldAmount;
-            _moe.transferFrom(account, address(this), migAmount);
+            assert(_moe.transferFrom(account, address(this), migAmount));
         }
     }
 
@@ -129,12 +134,13 @@ contract XPowerNft is NftBase {
     ) external {
         require(
             account == msg.sender || approvedMint(account, msg.sender),
-            "caller is not token owner or approved"
+            UnauthorizedAccount(account)
         );
         _depositFromBatch(account, levels, amounts); // MOE transfer to vault
         _mintBatch(account, idsBy(year(), levels), amounts, "");
     }
 
+    // slither-disable-next-line arbitrary-send-erc20
     function _depositFromBatch(
         address account,
         uint256[] memory levels,
@@ -144,10 +150,12 @@ contract XPowerNft is NftBase {
         for (uint256 i = 0; i < levels.length; i++) {
             sumAmount += amounts[i] * denominationOf(levels[i]);
         }
-        _moe.transferFrom(
-            account,
-            address(this),
-            sumAmount * 10 ** _moe.decimals()
+        assert(
+            _moe.transferFrom(
+                account,
+                address(this),
+                sumAmount * 10 ** _moe.decimals()
+            )
         );
     }
 
@@ -158,7 +166,7 @@ contract XPowerNft is NftBase {
         uint256[] memory amounts
     ) public override {
         for (uint256 i = 0; i < ids.length; i++) {
-            require(_redeemable(ids[i]), "irredeemable issue");
+            require(_redeemable(ids[i]), IrredeemableIssue(ids[i]));
         }
         super.burnBatch(account, ids, amounts);
         _redeemToBatch(account, ids, amounts);
@@ -173,7 +181,7 @@ contract XPowerNft is NftBase {
         for (uint256 i = 0; i < ids.length; i++) {
             totalAmount += amounts[i] * denominationOf(levelOf(ids[i]));
         }
-        _moe.transfer(account, totalAmount * 10 ** _moe.decimals());
+        assert(_moe.transfer(account, totalAmount * 10 ** _moe.decimals()));
     }
 
     /** upgrade NFTs */
@@ -185,9 +193,9 @@ contract XPowerNft is NftBase {
     ) external {
         require(
             account == msg.sender || approvedUpgrade(account, msg.sender),
-            "caller is not token owner or approved"
+            UnauthorizedAccount(account)
         );
-        require(level > 2, "non-ternary level");
+        require(level > 2, NonTernaryLevel(level));
         _burn(account, idBy(anno, level - 3), amount * 1000);
         _mint(account, idBy(anno, level), amount, "");
     }
@@ -201,13 +209,13 @@ contract XPowerNft is NftBase {
     ) external {
         require(
             account == msg.sender || approvedUpgrade(account, msg.sender),
-            "caller is not token owner or approved"
+            UnauthorizedAccount(account)
         );
         uint256[][] memory levelz = new uint256[][](annos.length);
         for (uint256 i = 0; i < annos.length; i++) {
             levelz[i] = new uint256[](levels[i].length);
             for (uint256 j = 0; j < levels[i].length; j++) {
-                require(levels[i][j] > 2, "non-ternary level");
+                require(levels[i][j] > 2, NonTernaryLevel(levels[i][j]));
                 levelz[i][j] = levels[i][j] - 3;
             }
         }
@@ -226,7 +234,7 @@ contract XPowerNft is NftBase {
 
     /** approve upgrading by `operator` */
     function approveUpgrade(address operator, bool approved) external {
-        require(msg.sender != operator, "approving upgrading for self");
+        require(msg.sender != operator, SelfApproving(operator));
         _upgradingApprovals[msg.sender][operator] = approved;
         emit ApproveUpgrading(msg.sender, operator, approved);
     }
@@ -251,4 +259,9 @@ contract XPowerNft is NftBase {
         address indexed operator,
         bool approved
     );
+
+    /** Thrown on irredeemable issue. */
+    error IrredeemableIssue(uint256 nft_id);
+    /** Thrown on non-ternary level. */
+    error NonTernaryLevel(uint256 level);
 }

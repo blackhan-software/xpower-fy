@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {NftBase} from "./base/NftBase.sol";
-import {MoeTreasury} from "./MoeTreasury.sol";
-
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import {MoeTreasury} from "./MoeTreasury.sol";
+import {NftBase} from "./base/NftBase.sol";
+
 /**
- * Abstract base class for staked XPowerNft(s): Only the contract owner
- * i.e. the NftTreasury is allowed to mint and burn XPowerPpt tokens.
+ * Abstract base class for staked XPowerNft(s): Only the contract
+ * owner, the NftTreasury, is allowed to mint and burn APowerNfts.
  */
-contract XPowerPpt is NftBase {
+contract APowerNft is NftBase, ReentrancyGuardTransient {
     /** map of age: account => nft-id => accumulator [seconds] */
     mapping(address => mapping(uint256 => uint256)) private _age;
     /** map of levels: nft-level => accumulator */
@@ -23,14 +24,14 @@ contract XPowerPpt is NftBase {
         string memory pptUri,
         address[] memory pptBase,
         uint256 deadlineIn
-    ) NftBase("XPower PPTs", "XPOWPPT", pptUri, pptBase, deadlineIn) {}
+    ) NftBase("APower NFTs", "APOWNFT", pptUri, pptBase, deadlineIn) {}
 
     /** MOE treasury */
     MoeTreasury private _mty;
 
     /** post-constructor init (once) */
     function init(address mty) external {
-        require(address(_mty) == address(0), "already initialized");
+        require(address(_mty) == address(0), AlreadyInitialized(_mty));
         _mty = MoeTreasury(mty);
         emit Init(mty);
     }
@@ -38,26 +39,28 @@ contract XPowerPpt is NftBase {
     event Init(address mty);
 
     /** transfer tokens (and reset age) */
+    // slither-disable-next-line reentrancy-no-eth
     function safeTransferFrom(
         address account,
         address to,
         uint256 nftId,
         uint256 amount,
         bytes memory data
-    ) public override {
+    ) public override nonReentrant {
         _pushBurn(account, nftId, amount);
         _pushMint(to, nftId, amount);
         super.safeTransferFrom(account, to, nftId, amount, data);
     }
 
     /** batch transfer tokens (and reset age) */
+    // slither-disable-next-line reentrancy-no-eth
     function safeBatchTransferFrom(
         address account,
         address to,
         uint256[] memory nftIds,
         uint256[] memory amounts,
         bytes memory data
-    ) public override {
+    ) public override nonReentrant {
         _pushBurnBatch(account, nftIds, amounts);
         _pushMintBatch(to, nftIds, amounts);
         super.safeBatchTransferFrom(account, to, nftIds, amounts, data);
@@ -79,8 +82,8 @@ contract XPowerPpt is NftBase {
         uint256[] memory nftIds,
         uint256[] memory amounts
     ) external onlyOwner {
-        require(nftIds.length > 0, "empty ids");
-        require(amounts.length > 0, "empty amounts");
+        require(nftIds.length > 0, EmptyIds());
+        require(amounts.length > 0, EmptyAmounts());
         _memoMintBatch(account, nftIds, amounts);
         _mintBatch(account, nftIds, amounts, "");
     }
@@ -101,8 +104,8 @@ contract XPowerPpt is NftBase {
         uint256[] memory nftIds,
         uint256[] memory amounts
     ) public override onlyOwner {
-        require(nftIds.length > 0, "empty ids");
-        require(amounts.length > 0, "empty amounts");
+        require(nftIds.length > 0, EmptyIds());
+        require(amounts.length > 0, EmptyAmounts());
         _memoBurnBatch(account, nftIds, amounts);
         _burnBatch(account, nftIds, amounts);
     }
@@ -138,7 +141,7 @@ contract XPowerPpt is NftBase {
     ) private {
         require(
             nftIds.length == amounts.length,
-            "ERC1155: ids and amounts length mismatch"
+            LengthMismatch(nftIds, amounts)
         );
         for (uint256 i = 0; i < nftIds.length; i++) {
             _pushMint(account, nftIds[i], amounts[i]);
@@ -147,9 +150,10 @@ contract XPowerPpt is NftBase {
 
     /** remember burn action (and refresh claimed) */
     function _pushBurn(address account, uint256 nftId, uint256 amount) private {
+        require(amount > 0, InvalidAmount(amount));
         require(
-            amount > 0 && balanceOf(account, nftId) >= amount,
-            "ERC1155: invalid amount or insufficient balance for transfer"
+            balanceOf(account, nftId) >= amount,
+            InsufficientBalance(balanceOf(account, nftId))
         );
         _mty.refreshClaimed(
             account,
@@ -172,7 +176,7 @@ contract XPowerPpt is NftBase {
     ) private {
         require(
             nftIds.length == amounts.length,
-            "ERC1155: ids and amounts length mismatch"
+            LengthMismatch(nftIds, amounts)
         );
         for (uint256 i = 0; i < nftIds.length; i++) {
             _pushBurn(account, nftIds[i], amounts[i]);
@@ -194,7 +198,7 @@ contract XPowerPpt is NftBase {
     ) private {
         require(
             nftIds.length == amounts.length,
-            "ERC1155: ids and amounts length mismatch"
+            LengthMismatch(nftIds, amounts)
         );
         for (uint256 i = 0; i < nftIds.length; i++) {
             _memoMint(account, nftIds[i], amounts[i]);
@@ -216,10 +220,23 @@ contract XPowerPpt is NftBase {
     ) private {
         require(
             nftIds.length == amounts.length,
-            "ERC1155: ids and amounts length mismatch"
+            LengthMismatch(nftIds, amounts)
         );
         for (uint256 i = 0; i < nftIds.length; i++) {
             _memoBurn(account, nftIds[i], amounts[i]);
         }
     }
+
+    /** Thrown on length mismatch between NFT IDs and amounts. */
+    error LengthMismatch(uint256[] nft_ids, uint256[] amounts);
+    /** Thrown on already initialized MOE treasury. */
+    error AlreadyInitialized(MoeTreasury moe_treasury);
+    /** Thrown on insufficient balance. */
+    error InsufficientBalance(uint256 balance);
+    /** Thrown on invalid amount. */
+    error InvalidAmount(uint256 amount);
+    /** Thrown on empty amounts. */
+    error EmptyAmounts();
+    /** Thrown on empty NFT IDs. */
+    error EmptyIds();
 }

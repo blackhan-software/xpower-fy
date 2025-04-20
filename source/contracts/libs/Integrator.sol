@@ -81,7 +81,7 @@ library Integrator {
     ) internal view returns (uint256) {
         if (items.length > 0) {
             Item memory last = items[items.length - 1];
-            require(stamp >= last.stamp, "invalid stamp");
+            require(stamp >= last.stamp, InvalidTimestamp(stamp));
             uint256 area = value * (stamp - last.stamp);
             return last.area + area;
         }
@@ -97,11 +97,14 @@ library Integrator {
     ) private view returns (Item memory) {
         if (items.length > 0) {
             Item memory last = items[items.length - 1];
-            require(stamp >= last.stamp, "invalid stamp");
+            require(stamp >= last.stamp, InvalidTimestamp(stamp));
             uint256 area = value * (stamp - last.stamp);
             if (meta != "") last.prev = items.length;
             return Item(stamp, value, last.area + area, last.prev);
         }
         return Item(stamp, value, 0, 0);
     }
+
+    /** Thrown on invalid timestamp. */
+    error InvalidTimestamp(uint256 stamp);
 }

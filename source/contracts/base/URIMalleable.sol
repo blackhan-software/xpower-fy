@@ -45,9 +45,9 @@ abstract contract URIMalleable is ERC1155, URIMalleableSupervised {
         uint256 year
     ) external onlyRole(URI_DATA_ROLE) {
         if (!_empty(_uris[year])) {
-            require(year + DECADE > Nft.year(), "immalleable year");
+            require(year + DECADE > Nft.year(), ImmalleableYear(year));
         }
-        require(year > 2020, "invalid year");
+        require(year > 2020, InvalidYear(year));
         _uris[year] = newuri;
     }
 
@@ -81,4 +81,9 @@ abstract contract URIMalleable is ERC1155, URIMalleableSupervised {
     ) public view virtual override(ERC1155, Supervised) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
+
+    /** Thrown on immalleable year. */
+    error ImmalleableYear(uint256 year);
+    /** Thrown on invalid year. */
+    error InvalidYear(uint256 year);
 }

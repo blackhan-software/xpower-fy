@@ -19,7 +19,10 @@ abstract contract NftRoyalty is IERC2981, NftRoyaltySupervised {
     }
 
     /** @return royalty beneficiary and amount (for nft-id & price) */
-    function royaltyInfo(uint256, uint256 price) external view override returns (address, uint256) {
+    function royaltyInfo(
+        uint256,
+        uint256 price
+    ) external view override returns (address, uint256) {
         return (_royal, price / 200);
     }
 
@@ -30,6 +33,7 @@ abstract contract NftRoyalty is IERC2981, NftRoyaltySupervised {
 
     /** set default royalty beneficiary */
     function setRoyal(address beneficiary) external onlyRole(NFT_ROYAL_ROLE) {
+        require(beneficiary != address(0), ZeroAddress(beneficiary));
         _royal = beneficiary;
         emit SetRoyal(beneficiary);
     }
@@ -37,7 +41,14 @@ abstract contract NftRoyalty is IERC2981, NftRoyaltySupervised {
     event SetRoyal(address beneficiary);
 
     /** @return true if this contract implements the interface defined by interface-id */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(IERC165, Supervised) returns (bool) {
-        return interfaceId == type(IERC2981).interfaceId || super.supportsInterface(interfaceId);
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(IERC165, Supervised) returns (bool) {
+        return
+            interfaceId == type(IERC2981).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
+
+    /** Thrown on zero address. */
+    error ZeroAddress(address beneficiary);
 }

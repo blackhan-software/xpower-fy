@@ -1,17 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.29;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Constant} from "../libs/Constant.sol";
 
-abstract contract Supervised is AccessControlEnumerable {
+abstract contract Supervised is AccessControl {
+    /** protocol version */
+    uint256 public constant VERSION = Constant.VERSION;
+
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /** @return true if this contract implements the interface defined by interface-id */
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override returns (bool) {
         return super.supportsInterface(interfaceId);
     }
+
+    /** Thrown on unauthorized account. */
+    error UnauthorizedAccount(address account);
+    /** Thrown on self-approving operator. */
+    error SelfApproving(address operator);
 }
 
 abstract contract MoeTreasurySupervised is Supervised {
@@ -33,7 +44,8 @@ abstract contract MoeTreasurySupervised is Supervised {
 abstract contract MoeMigratableSupervised is Supervised {
     /** role grants right to seal MOE immigration */
     bytes32 public constant MOE_SEAL_ROLE = keccak256("MOE_SEAL_ROLE");
-    bytes32 public constant MOE_SEAL_ADMIN_ROLE = keccak256("MOE_SEAL_ADMIN_ROLE");
+    bytes32 public constant MOE_SEAL_ADMIN_ROLE =
+        keccak256("MOE_SEAL_ADMIN_ROLE");
 
     constructor() {
         _setRoleAdmin(MOE_SEAL_ROLE, MOE_SEAL_ADMIN_ROLE);
@@ -44,7 +56,8 @@ abstract contract MoeMigratableSupervised is Supervised {
 abstract contract SovMigratableSupervised is Supervised {
     /** role grants right to seal SOV immigration */
     bytes32 public constant SOV_SEAL_ROLE = keccak256("SOV_SEAL_ROLE");
-    bytes32 public constant SOV_SEAL_ADMIN_ROLE = keccak256("SOV_SEAL_ADMIN_ROLE");
+    bytes32 public constant SOV_SEAL_ADMIN_ROLE =
+        keccak256("SOV_SEAL_ADMIN_ROLE");
 
     constructor() {
         _setRoleAdmin(SOV_SEAL_ROLE, SOV_SEAL_ADMIN_ROLE);
@@ -55,10 +68,12 @@ abstract contract SovMigratableSupervised is Supervised {
 abstract contract NftMigratableSupervised is Supervised {
     /** role grants right to seal NFT immigration */
     bytes32 public constant NFT_SEAL_ROLE = keccak256("NFT_SEAL_ROLE");
-    bytes32 public constant NFT_SEAL_ADMIN_ROLE = keccak256("NFT_SEAL_ADMIN_ROLE");
+    bytes32 public constant NFT_SEAL_ADMIN_ROLE =
+        keccak256("NFT_SEAL_ADMIN_ROLE");
     /** role grants right to open NFT emigration */
     bytes32 public constant NFT_OPEN_ROLE = keccak256("NFT_OPEN_ROLE");
-    bytes32 public constant NFT_OPEN_ADMIN_ROLE = keccak256("NFT_OPEN_ADMIN_ROLE");
+    bytes32 public constant NFT_OPEN_ADMIN_ROLE =
+        keccak256("NFT_OPEN_ADMIN_ROLE");
 
     constructor() {
         _setRoleAdmin(NFT_SEAL_ROLE, NFT_SEAL_ADMIN_ROLE);
@@ -71,7 +86,8 @@ abstract contract NftMigratableSupervised is Supervised {
 abstract contract NftRoyaltySupervised is Supervised {
     /** role grants right to set the NFT's default royalty beneficiary */
     bytes32 public constant NFT_ROYAL_ROLE = keccak256("NFT_ROYAL_ROLE");
-    bytes32 public constant NFT_ROYAL_ADMIN_ROLE = keccak256("NFT_ROYAL_ADMIN_ROLE");
+    bytes32 public constant NFT_ROYAL_ADMIN_ROLE =
+        keccak256("NFT_ROYAL_ADMIN_ROLE");
 
     constructor() {
         _setRoleAdmin(NFT_ROYAL_ROLE, NFT_ROYAL_ADMIN_ROLE);
@@ -82,7 +98,8 @@ abstract contract NftRoyaltySupervised is Supervised {
 abstract contract URIMalleableSupervised is Supervised {
     /** role grants right to change metadata URIs */
     bytes32 public constant URI_DATA_ROLE = keccak256("URI_DATA_ROLE");
-    bytes32 public constant URI_DATA_ADMIN_ROLE = keccak256("URI_DATA_ADMIN_ROLE");
+    bytes32 public constant URI_DATA_ADMIN_ROLE =
+        keccak256("URI_DATA_ADMIN_ROLE");
 
     constructor() {
         _setRoleAdmin(URI_DATA_ROLE, URI_DATA_ADMIN_ROLE);
