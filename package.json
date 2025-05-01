@@ -26,5 +26,5 @@
     "clean": "FOUNDRY_OPTIMIZER=true forge clean",
     "test": "FOUNDRY_OPTIMIZER=false forge test"
   },
-  "version": "9.2.1"
+  "version": "10.0.0"
 }
