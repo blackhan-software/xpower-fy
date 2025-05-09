@@ -305,7 +305,7 @@ abstract contract SovMigratable is
         uint256 mig_moe = _moeMigratable.migrateFrom(account, old_moe, idx_moe);
         // slither-disable-next-line arbitrary-send-erc20
         assert(_moeMigratable.transferFrom(account, address(this), mig_moe));
-        _mint(address(this), new_sov);
+        _mint(account, new_sov);
         return new_sov;
     }
 

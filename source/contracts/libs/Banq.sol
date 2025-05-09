@@ -35,7 +35,7 @@ contract Banq is Supervised {
     event Init(address pool);
 
     /**
-     * Used to supply tokens to a pool and burn any excess tokens.
+     * Supply tokens to a pool (and *burning* any excess).
      *
      * @param account to supply for
      * @param amount to supply
@@ -46,18 +46,17 @@ contract Banq is Supervised {
         uint256 amount,
         uint256 nonce
     ) {
-        uint256 old_balance = _token.balanceOf(address(this));
+        uint256 old_balance = _token.balanceOf(account);
         _; // execute the body of the modified function
-        uint256 new_balance = _token.balanceOf(address(this));
+        uint256 new_balance = _token.balanceOf(account);
         if (new_balance > old_balance) {
             unchecked {
                 uint256 dif_balance = new_balance - old_balance;
                 uint256 min_balance = Math.min(amount, dif_balance);
                 if (dif_balance > min_balance) {
-                    _token.burn(dif_balance - min_balance);
+                    _token.burnFrom(account, dif_balance - min_balance);
                 }
                 if (pool == address(0)) {
-                    assert(_token.transfer(account, min_balance));
                     if (_token.totalSupply() > _free_supply) {
                         revert Capped(_free_supply);
                     }
@@ -69,12 +68,9 @@ contract Banq is Supervised {
     }
 
     function _supply(address account, uint256 amount, uint256 nonce) private {
-        assert(_token.approve(pool, amount));
-        //
-        // Supply tokens to pool (for s-tokens):
-        //
         bytes memory args1 = abi.encodeWithSelector(
-            0x7cf51195, // supply(address,uint256,bool)
+            0x3e6f66dc, // supply(address,address,uint256,bool)
+            account, // address
             _token, // address
             amount, // supply
             true, // lock
@@ -91,24 +87,6 @@ contract Banq is Supervised {
         }
         uint256 assets = abi.decode(data1, (uint256));
         require(assets > 0, InvalidAssets(assets));
-        //
-        // Transfer received s-tokens to account:
-        //
-        bytes memory args2 = abi.encodeWithSelector(
-            0x62400e4c, // supplyOf(address)
-            _token // address
-        );
-        (bool ok2, bytes memory data2) = pool.call(args2);
-        if (!ok2) {
-            if (data2.length > 0) {
-                assembly {
-                    revert(add(data2, 32), mload(data2))
-                }
-            }
-            revert();
-        }
-        IERC20 supply = IERC20(abi.decode(data2, (address)));
-        assert(supply.transfer(account, assets));
     }
 
     /** Thrown on already initialized pool. */
