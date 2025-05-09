@@ -126,7 +126,7 @@ contract MoeTreasury is
         _claimed[account][nftId] += moe_amount;
         uint256 moe_wrap = _sov.wrappable(moe_amount);
         assert(_moe.approve(address(_sov), moe_wrap));
-        uint256 sov_minted = _sov.mint(address(this), moe_amount);
+        uint256 sov_minted = _sov.mint(account, moe_amount);
         require(sov_minted > 0, InvalidClaim(nftId));
         _minted[account][nftId] += sov_minted;
         emit Claim(account, nftId, sov_minted);
@@ -150,7 +150,7 @@ contract MoeTreasury is
             _claimed[account][nftIds[i]] += moe_amount[i];
             uint256 moe_wrap = _sov.wrappable(moe_amount[i]);
             assert(_moe.approve(address(_sov), moe_wrap));
-            sov_minted[i] = _sov.mint(address(this), moe_amount[i]);
+            sov_minted[i] = _sov.mint(account, moe_amount[i]);
             require(sov_minted[i] > 0, InvalidClaim(nftIds[i]));
             _minted[account][nftIds[i]] += sov_minted[i];
         }

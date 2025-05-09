@@ -20,6 +20,13 @@ contract TestBase is Base {
     uint256[] mintables = [mintable0, mintable3];
     uint256[] amounts = [amount0, amount3];
     uint256[] nils = [uint(0), uint(0)];
+
+    function setUp() public virtual override {
+        super.setUp();
+        pool.approveSupply(address(mty), true);
+        sov.approve(address(mty), type(uint256).max);
+        sov.approve(address(pool), type(uint256).max);
+    }
 }
 
 contract MoeTreasuryTest_Claim is TestBase {

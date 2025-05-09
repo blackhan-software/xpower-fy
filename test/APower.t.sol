@@ -171,6 +171,11 @@ contract XPowerTest_Migratable is TestBase {
         moe_old.approve(address(sov_old), type(uint256).max);
         vm.warp(block.timestamp + 1);
         sov_old.mint(papa, 1e21);
+        ///
+        vm.prank(papa);
+        pool.approveSupply(address(sov_new), true);
+        vm.prank(papa);
+        sov_new.approve(address(pool), type(uint256).max);
     }
 
     function testMigrate() public {

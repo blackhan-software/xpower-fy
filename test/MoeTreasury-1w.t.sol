@@ -9,6 +9,8 @@ contract TestBase is Base {
     function setUp() public virtual override {
         super.setUp();
         mty.init(address(pool));
+        pool.approveSupply(address(mty), true);
+        sov.approve(address(pool), type(uint256).max);
     }
 }
 
